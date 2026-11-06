@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://akmmelocgwqfplsxnakl.supabase.co; img-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Jarvis Brain | Zugriffsfreigabe</title>
+  <link rel="stylesheet" href="../../app.css">
+</head>
+<body>
+  <main>
+    <article>
+      <h1>Jarvis Brain</h1>
+      <p>Sichere OAuth-Freigabe für einen externen KI-Client. Eine Verbindung entsteht erst nach einem ausdrücklichen Klick.</p>
+      <p id="status" role="status">Anmeldung wird geprüft …</p>
+
+      <section id="login" class="hidden">
+        <h2>Mit E-Mail anmelden</h2>
+        <p>Nur ein bereits vorhandenes Brain-Besitzerkonto kann freigeben. Diese Seite legt kein Konto und keinen Besitzer an.</p>
+        <input id="mail" type="email" autocomplete="email" placeholder="E-Mail-Adresse">
+        <button id="send" type="button">Anmeldelink senden</button>
+      </section>
+
+      <section id="approval" class="hidden">
+        <h2 id="approval-title">Verbindung prüfen</h2>
+        <aside>
+          <div class="fact"><small>Anfragende Anwendung</small><p><strong id="client"></strong></p></div>
+          <div class="fact"><small>Weiterleitungsadresse</small><p><code id="redirect"></code></p></div>
+          <div class="fact"><small>Angeforderte OAuth-Scopes</small><ul id="scopes"></ul></div>
+        </aside>
+        <p id="grant-note"></p>
+        <label class="confirm"><input id="confirm" type="checkbox"> Ich habe die Anwendung, die Weiterleitungsadresse und die Scopes geprüft.</label>
+        <div>
+          <button id="approve" type="button" disabled>Verbindung genehmigen</button>
+          <button id="deny" class="secondary" type="button">Ablehnen</button>
+        </div>
+      </section>
+
+      <section id="account" class="hidden">
+        <h2>Brain-Freigaben</h2>
+        <p class="muted" id="who"></p>
+        <div id="bindings"></div>
+        <button id="signout" class="secondary" type="button">Abmelden</button>
+      </section>
+    </article>
+  </main>
+  <script src="../../vendor/supabase.js"></script>
+  <script src="../../config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
+

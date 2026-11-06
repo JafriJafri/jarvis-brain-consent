@@ -1,0 +1,55 @@
+# Copy this file to the root of the public repository
+# JafriJafri/jarvis-brain-consent as .github/workflows/pages.yml.
+# GitHub only runs workflows that live at the repository root.
+name: Deploy consent site to GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install the pinned supabase-js build
+        run: npm ci
+
+      - name: Assemble the Pages site
+        run: |
+          npm run vendor
+          mkdir -p _site/oauth/consent _site/vendor
+          cp index.html app.css config.js _site/
+          cp vendor/supabase.js _site/vendor/supabase.js
+          cp oauth/consent/index.html oauth/consent/app.js _site/oauth/consent/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+

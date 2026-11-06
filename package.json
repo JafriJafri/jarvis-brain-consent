@@ -1,0 +1,13 @@
+{
+  "name": "jarvis-brain-consent",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Public Jarvis Brain OAuth consent page. Publishable Supabase values only.",
+  "scripts": {
+    "vendor": "node --input-type=module -e \"import {cpSync,mkdirSync} from 'node:fs'; mkdirSync('vendor',{recursive:true}); cpSync('node_modules/@supabase/supabase-js/dist/umd/supabase.js','vendor/supabase.js');\""
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.95.0"
+  }
+}
+
