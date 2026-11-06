@@ -288,6 +288,42 @@
     await show();
   });
   el("reload").addEventListener("click", () => show());
+  el("google-tasks-connect").addEventListener("click", async () => {
+    const button = el("google-tasks-connect");
+    button.disabled = true;
+    try {
+      const session = await sb.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error("Nicht angemeldet");
+      const response = await fetch(config.supabaseUrl + "/functions/v1/google-tasks/oauth/start", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer " + token,
+          apikey: config.supabaseKey,
+        },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok || typeof result.authorization_url !== "string" || !result.authorization_url) {
+        throw new Error(result.error || "Google Tasks konnte nicht gestartet werden.");
+      }
+      window.location.href = result.authorization_url;
+    } catch (error) {
+      setStatus(error.message);
+      button.disabled = false;
+    }
+  });
+  // callbackLocation("connected" | "error") sends the owner back here.
+  const googleTasksUrl = new URL(window.location.href);
+  const googleTasks = googleTasksUrl.searchParams.get("google_tasks");
+  if (googleTasks === "connected" || googleTasks === "error") {
+    const banner = el("google-tasks");
+    banner.textContent = googleTasks === "connected"
+      ? "Google Tasks ist verbunden."
+      : "Google Tasks konnte nicht verbunden werden.";
+    banner.classList.remove("hidden");
+    googleTasksUrl.searchParams.delete("google_tasks");
+    window.history.replaceState(null, "", googleTasksUrl.pathname + googleTasksUrl.search + googleTasksUrl.hash);
+  }
   // TOKEN_REFRESHED must not reload. getSession() can refresh the access token,
   // which would emit another event and call show() again. INITIAL_SESSION is
   // applied once; the direct show() below is that first render.
