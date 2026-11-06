@@ -16,7 +16,7 @@
     el("status").textContent = text;
   }
 
-  function show(id, visible) {
+  function toggle(id, visible) {
     el(id).classList.toggle("hidden", !visible);
   }
 
@@ -183,13 +183,13 @@
   async function show() {
     const user = await sb.auth.getUser();
     if (!user.data.user) {
-      show("login", true);
-      show("app", false);
+      toggle("login", true);
+      toggle("app", false);
       setStatus("Mit dem Besitzerkonto anmelden.");
       return;
     }
-    show("login", false);
-    show("app", true);
+    toggle("login", false);
+    toggle("app", true);
     el("who").textContent = user.data.user.email || user.data.user.id;
     try {
       await load();
@@ -231,6 +231,6 @@
     await show();
   });
   el("reload").addEventListener("click", () => show());
-  sb.auth.onAuthStateChange(() => { void show(); });
+  sb.auth.onAuthStateChange(() => { setTimeout(() => { void show(); }, 0); });
   void show();
 })();
