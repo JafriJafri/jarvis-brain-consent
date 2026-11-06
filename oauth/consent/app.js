@@ -324,4 +324,3 @@
   sb.auth.onAuthStateChange(() => queueAccount());
   queueAccount();
 })();
-

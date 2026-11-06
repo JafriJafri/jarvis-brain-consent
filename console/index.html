@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://akmmelocgwqfplsxnakl.supabase.co; img-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Jarvis Brain | Konsole</title>
+  <link rel="stylesheet" href="../app.css">
+</head>
+<body>
+  <main>
+    <article>
+      <h1>Jarvis Brain Konsole</h1>
+      <p>Nur ein bereits eingetragenes Besitzerkonto kann Vorschläge freigeben oder eine Client-Freigabe widerrufen. Diese Seite legt kein Konto und keinen Besitzer an.</p>
+      <p id="status" role="status">Anmeldung wird geprüft …</p>
+      <section id="login">
+        <h2>Anmelden</h2>
+        <input id="email" type="email" autocomplete="username" placeholder="E-Mail-Adresse">
+        <input id="password" type="password" autocomplete="current-password" placeholder="Passwort, falls vorhanden">
+        <div>
+          <button id="password-signin" type="button">Mit Passwort anmelden</button>
+          <button id="magic" class="secondary" type="button">Anmeldelink senden</button>
+        </div>
+      </section>
+      <section id="app" class="hidden">
+        <p class="muted" id="who"></p>
+        <p id="overview"></p>
+        <button id="reload" type="button">Aktualisieren</button>
+        <button id="signout" class="secondary" type="button">Abmelden</button>
+        <h2>Offene Wissensvorschläge</h2>
+        <div id="memories"></div>
+        <h2>Neue Bereiche</h2>
+        <div id="structures"></div>
+        <h2>Client-Freigaben</h2>
+        <div id="bindings"></div>
+        <h2>Letzte Werkzeugaufrufe</h2>
+        <div id="receipts"></div>
+        <h2>Grants, nur lesend</h2>
+        <div id="grants"></div>
+        <h2>Letzter Tagescheck</h2>
+        <pre id="daily">Noch kein Lauf</pre>
+      </section>
+    </article>
+  </main>
+  <script src="../vendor/supabase.js"></script>
+  <script src="../config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

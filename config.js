@@ -5,5 +5,5 @@ window.JARVIS_BRAIN_CONSENT = {
   supabaseUrl: "https://akmmelocgwqfplsxnakl.supabase.co",
   supabaseKey: "sb_publishable_8idZAeHDVnREIiHD-PXXsQ_FV3_jkq1",
   consentApi: "https://akmmelocgwqfplsxnakl.supabase.co/functions/v1/brain-consent",
+  consoleApi: "https://akmmelocgwqfplsxnakl.supabase.co/functions/v1/brain-console",
 };
-

@@ -39,10 +39,11 @@ jobs:
       - name: Assemble the Pages site
         run: |
           npm run vendor
-          mkdir -p _site/oauth/consent _site/vendor
+          mkdir -p _site/oauth/consent _site/console _site/vendor
           cp index.html app.css config.js _site/
           cp vendor/supabase.js _site/vendor/supabase.js
           cp oauth/consent/index.html oauth/consent/app.js _site/oauth/consent/
+          cp console/index.html console/app.js _site/console/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -52,4 +53,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
