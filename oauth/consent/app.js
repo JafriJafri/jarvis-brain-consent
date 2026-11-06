@@ -87,9 +87,14 @@
       : "Diese Weiterleitungsadresse ist für eine Brain-Freigabe nicht zugelassen. Ablehnen ist möglich; Genehmigen vergibt keinen Brain-Zugriff.";
   }
 
+  let accessToken = null;
+
   async function api(path, body) {
-    const session = await sb.auth.getSession();
-    const token = session.data.session?.access_token;
+    let token = accessToken;
+    if (!token) {
+      const session = await sb.auth.getSession();
+      token = session.data.session?.access_token;
+    }
     if (!token) throw new Error("Keine gültige Anmeldung.");
     const response = await fetch(config.consentApi + path, {
       method: body ? "POST" : "GET",
@@ -154,9 +159,9 @@
     }
   }
 
-  async function showAccount() {
-    const user = await sb.auth.getUser();
-    if (!user.data.user) {
+  async function showAccount(session) {
+    accessToken = session?.access_token || null;
+    if (!session?.user) {
       show("login", Boolean(state.authorizationId));
       show("approval", false);
       show("account", false);
@@ -167,7 +172,7 @@
     }
     show("login", false);
     show("account", true);
-    el("who").textContent = user.data.user.email || user.data.user.id;
+    el("who").textContent = session.user.email || session.user.id;
     try {
       await loadBindings();
     } catch (error) {
@@ -310,17 +315,39 @@
 
   el("signout").addEventListener("click", async () => {
     await sb.auth.signOut();
-    await showAccount();
   });
 
-  let accountQueue = Promise.resolve();
-  function queueAccount() {
-    accountQueue = accountQueue
-      .then(() => showAccount())
-      .catch((error) => setStatus(error instanceof Error ? error.message : "Anmeldung fehlgeschlagen"));
+  // One render for the first session and for SIGNED_IN / SIGNED_OUT.
+  // The callback does not call getUser() or getSession(). A newer event
+  // supersedes an older scheduled render instead of queueing another one.
+  let initialSessionHandled = false;
+  let renderEpoch = 0;
+  let shownToken = null;
+  function scheduleAccount(session) {
+    const epoch = ++renderEpoch;
+    setTimeout(() => {
+      if (epoch !== renderEpoch) return;
+      const token = session?.access_token || "";
+      if (token === shownToken) return;
+      shownToken = token;
+      void showAccount(session).catch((error) => {
+        setStatus(error instanceof Error ? error.message : "Anmeldung fehlgeschlagen");
+      });
+    }, 0);
   }
 
   state.authorizationId = authorizationIdFromLocation();
-  sb.auth.onAuthStateChange(() => queueAccount());
-  queueAccount();
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "TOKEN_REFRESHED") {
+      if (session?.access_token) accessToken = session.access_token;
+      return;
+    }
+    if (event === "INITIAL_SESSION") {
+      if (initialSessionHandled) return;
+      initialSessionHandled = true;
+    } else if (event !== "SIGNED_IN" && event !== "SIGNED_OUT") {
+      return;
+    }
+    scheduleAccount(event === "SIGNED_OUT" ? null : session);
+  });
 })();

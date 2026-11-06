@@ -77,7 +77,7 @@
       try {
         await api("/api/decide", {kind, id, decision});
         setStatus("Entscheidung gespeichert.");
-        await load();
+            await refreshLists();
       } catch (error) {
         setStatus("Entscheidung nicht gespeichert: " + error.message);
         approve.disabled = false;
@@ -91,58 +91,7 @@
     return wrap;
   }
 
-  // show() and load() share one render. A burst of auth events coalesces into
-  // the current run plus at most one follow-up, so the four console calls
-  // cannot overlap or queue without bound. A pending show() wins over load():
-  // it already refreshes the lists when the user is still signed in.
-  let viewRunning = false;
-  let viewAgain = null;
-
-  function runView(kind, task) {
-    let resolve, reject;
-    const result = new Promise((res, rej) => {
-      resolve = res;
-      reject = rej;
-    });
-    const waiter = {resolve, reject};
-    if (viewRunning) {
-      const waiters = viewAgain ? viewAgain.waiters : [];
-      waiters.push(waiter);
-      if (!viewAgain || kind === "show" || viewAgain.kind !== "show") {
-        viewAgain = {kind, task, waiters};
-      } else {
-        viewAgain.waiters = waiters;
-      }
-      return result;
-    }
-    viewRunning = true;
-    let current = {kind, task, waiters: [waiter]};
-    void (async () => {
-      try {
-        while (current) {
-          viewAgain = null;
-          try {
-            await current.task();
-            for (const item of current.waiters) item.resolve();
-          } catch (error) {
-            for (const item of current.waiters) item.reject(error);
-          }
-          current = viewAgain;
-        }
-      } finally {
-        viewRunning = false;
-      }
-    })();
-    return result;
-  }
-
-  function load() {
-    return runView("load", loadLists);
-  }
-
-  async function loadLists() {
-    const session = await sb.auth.getSession();
-    const token = session.data.session?.access_token;
+  async function loadLists(token) {
     if (!token) throw new Error("Nicht angemeldet");
     const [pending, bindings, receipts, grants] = await Promise.all([
       api("/api/pending", undefined, token),
@@ -200,7 +149,7 @@
           try {
             await api("/api/revoke", {id: binding.id});
             setStatus("Client-Freigabe deaktiviert.");
-            await load();
+            await refreshLists();
           } catch (error) {
             setStatus("Widerruf nicht gespeichert: " + error.message);
             button.disabled = false;
@@ -235,25 +184,42 @@
       : "Noch kein Tagescheck";
   }
 
-  function show() {
-    return runView("show", async () => {
-      const user = await sb.auth.getUser();
-      if (!user.data.user) {
-        toggle("login", true);
-        toggle("app", false);
-        setStatus("Mit dem Besitzerkonto anmelden.");
-        return;
-      }
-      toggle("login", false);
-      toggle("app", true);
-      el("who").textContent = user.data.user.email || user.data.user.id;
-      try {
-        await loadLists();
-        setStatus("");
-      } catch (error) {
-        setStatus("Zugriff nicht freigegeben: " + error.message);
-      }
-    });
+  async function refreshLists() {
+    const session = await sb.auth.getSession();
+    await loadLists(session.data.session?.access_token);
+  }
+
+  // The session object comes from the auth event. Rendering must not call
+  // getUser() or getSession(); those calls can emit another auth event.
+  async function applySession(session) {
+    if (!session?.user) {
+      toggle("login", true);
+      toggle("app", false);
+      setStatus("Mit dem Besitzerkonto anmelden.");
+      return;
+    }
+    toggle("login", false);
+    toggle("app", true);
+    el("who").textContent = session.user.email || session.user.id;
+    try {
+      await loadLists(session.access_token);
+      setStatus("");
+    } catch (error) {
+      setStatus("Zugriff nicht freigegeben: " + error.message);
+    }
+  }
+
+  let renderEpoch = 0;
+  let shownToken = null;
+  function scheduleRender(session) {
+    const epoch = ++renderEpoch;
+    setTimeout(() => {
+      if (epoch !== renderEpoch) return;
+      const token = session?.access_token || "";
+      if (token === shownToken) return;
+      shownToken = token;
+      void applySession(session);
+    }, 0);
   }
 
   el("password-signin").addEventListener("click", async () => {
@@ -265,7 +231,6 @@
     }
     const {error} = await sb.auth.signInWithPassword({email, password});
     setStatus(error ? "Anmeldung nicht möglich: " + error.message : "Angemeldet.");
-    if (!error) await show();
   });
 
   el("magic").addEventListener("click", async () => {
@@ -285,9 +250,12 @@
 
   el("signout").addEventListener("click", async () => {
     await sb.auth.signOut();
-    await show();
   });
-  el("reload").addEventListener("click", () => show());
+  el("reload").addEventListener("click", () => {
+    void refreshLists().catch((error) => {
+      setStatus("Zugriff nicht freigegeben: " + error.message);
+    });
+  });
   el("google-tasks-connect").addEventListener("click", async () => {
     const button = el("google-tasks-connect");
     button.disabled = true;
@@ -324,19 +292,17 @@
     googleTasksUrl.searchParams.delete("google_tasks");
     window.history.replaceState(null, "", googleTasksUrl.pathname + googleTasksUrl.search + googleTasksUrl.hash);
   }
-  // TOKEN_REFRESHED must not reload. getSession() can refresh the access token,
-  // which would emit another event and call show() again. INITIAL_SESSION is
-  // applied once; the direct show() below is that first render.
+  // Render only for the first session and for a real sign-in or sign-out.
+  // TOKEN_REFRESHED is ignored: a refresh must not schedule another render.
+  // The callback itself does not read the session; that would re-enter the lock.
   let initialSessionHandled = false;
-  sb.auth.onAuthStateChange((event) => {
+  sb.auth.onAuthStateChange((event, session) => {
     if (event === "INITIAL_SESSION") {
       if (initialSessionHandled) return;
       initialSessionHandled = true;
     } else if (event !== "SIGNED_IN" && event !== "SIGNED_OUT") {
       return;
     }
-    setTimeout(() => { void show(); }, 0);
+    scheduleRender(event === "SIGNED_OUT" ? null : session);
   });
-  initialSessionHandled = true;
-  void show();
 })();
