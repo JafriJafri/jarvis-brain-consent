@@ -27,9 +27,12 @@
     return url.toString();
   }
 
-  async function api(path, body) {
-    const session = await sb.auth.getSession();
-    const token = session.data.session?.access_token;
+  async function api(path, body, accessToken) {
+    let token = accessToken;
+    if (!token) {
+      const session = await sb.auth.getSession();
+      token = session.data.session?.access_token;
+    }
     if (!token) throw new Error("Nicht angemeldet");
     const response = await fetch(config.consoleApi + path, {
       method: body ? "POST" : "GET",
@@ -88,12 +91,64 @@
     return wrap;
   }
 
-  async function load() {
+  // show() and load() share one render. A burst of auth events coalesces into
+  // the current run plus at most one follow-up, so the four console calls
+  // cannot overlap or queue without bound. A pending show() wins over load():
+  // it already refreshes the lists when the user is still signed in.
+  let viewRunning = false;
+  let viewAgain = null;
+
+  function runView(kind, task) {
+    let resolve, reject;
+    const result = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    const waiter = {resolve, reject};
+    if (viewRunning) {
+      const waiters = viewAgain ? viewAgain.waiters : [];
+      waiters.push(waiter);
+      if (!viewAgain || kind === "show" || viewAgain.kind !== "show") {
+        viewAgain = {kind, task, waiters};
+      } else {
+        viewAgain.waiters = waiters;
+      }
+      return result;
+    }
+    viewRunning = true;
+    let current = {kind, task, waiters: [waiter]};
+    void (async () => {
+      try {
+        while (current) {
+          viewAgain = null;
+          try {
+            await current.task();
+            for (const item of current.waiters) item.resolve();
+          } catch (error) {
+            for (const item of current.waiters) item.reject(error);
+          }
+          current = viewAgain;
+        }
+      } finally {
+        viewRunning = false;
+      }
+    })();
+    return result;
+  }
+
+  function load() {
+    return runView("load", loadLists);
+  }
+
+  async function loadLists() {
+    const session = await sb.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) throw new Error("Nicht angemeldet");
     const [pending, bindings, receipts, grants] = await Promise.all([
-      api("/api/pending"),
-      api("/api/bindings"),
-      api("/api/receipts"),
-      api("/api/grants"),
+      api("/api/pending", undefined, token),
+      api("/api/bindings", undefined, token),
+      api("/api/receipts", undefined, token),
+      api("/api/grants", undefined, token),
     ]);
     el("overview").textContent = "Bestätigte Einträge: " + pending.total_confirmed
       + " | Offene Erinnerungen: " + pending.memory.length
@@ -180,23 +235,25 @@
       : "Noch kein Tagescheck";
   }
 
-  async function show() {
-    const user = await sb.auth.getUser();
-    if (!user.data.user) {
-      toggle("login", true);
-      toggle("app", false);
-      setStatus("Mit dem Besitzerkonto anmelden.");
-      return;
-    }
-    toggle("login", false);
-    toggle("app", true);
-    el("who").textContent = user.data.user.email || user.data.user.id;
-    try {
-      await load();
-      setStatus("");
-    } catch (error) {
-      setStatus("Zugriff nicht freigegeben: " + error.message);
-    }
+  function show() {
+    return runView("show", async () => {
+      const user = await sb.auth.getUser();
+      if (!user.data.user) {
+        toggle("login", true);
+        toggle("app", false);
+        setStatus("Mit dem Besitzerkonto anmelden.");
+        return;
+      }
+      toggle("login", false);
+      toggle("app", true);
+      el("who").textContent = user.data.user.email || user.data.user.id;
+      try {
+        await loadLists();
+        setStatus("");
+      } catch (error) {
+        setStatus("Zugriff nicht freigegeben: " + error.message);
+      }
+    });
   }
 
   el("password-signin").addEventListener("click", async () => {
@@ -231,6 +288,19 @@
     await show();
   });
   el("reload").addEventListener("click", () => show());
-  sb.auth.onAuthStateChange(() => { setTimeout(() => { void show(); }, 0); });
+  // TOKEN_REFRESHED must not reload. getSession() can refresh the access token,
+  // which would emit another event and call show() again. INITIAL_SESSION is
+  // applied once; the direct show() below is that first render.
+  let initialSessionHandled = false;
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "INITIAL_SESSION") {
+      if (initialSessionHandled) return;
+      initialSessionHandled = true;
+    } else if (event !== "SIGNED_IN" && event !== "SIGNED_OUT") {
+      return;
+    }
+    setTimeout(() => { void show(); }, 0);
+  });
+  initialSessionHandled = true;
   void show();
 })();
