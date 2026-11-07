@@ -48,6 +48,20 @@
     return result;
   }
 
+  function proposedContent(raw) {
+    let value = raw;
+    for (let depth = 0; depth < 4; depth += 1) {
+      if (value && typeof value === "object" && !Array.isArray(value)) return value;
+      if (typeof value !== "string") return null;
+      try {
+        value = JSON.parse(value.trim());
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
   function block(title, meta, detail) {
     const host = document.createElement("div");
     host.className = "fact";
@@ -62,7 +76,7 @@
     return host;
   }
 
-  function actions(kind, id) {
+  function actions(kind, id, accessToken) {
     const approve = document.createElement("button");
     approve.type = "button";
     approve.textContent = "Freigeben";
@@ -75,9 +89,9 @@
       approve.disabled = true;
       reject.disabled = true;
       try {
-        await api("/api/decide", {kind, id, decision});
+        await api("/api/decide", {kind, id, decision}, accessToken);
         setStatus("Entscheidung gespeichert.");
-            await refreshLists();
+        await refreshLists();
       } catch (error) {
         setStatus("Entscheidung nicht gespeichert: " + error.message);
         approve.disabled = false;
@@ -106,12 +120,13 @@
     memories.replaceChildren();
     if (!pending.memory.length) memories.textContent = "Keine offenen Vorschläge.";
     for (const entry of pending.memory) {
+      const content = proposedContent(entry.proposed_content);
       const card = block(
-        entry.proposed_content?.title || entry.proposed_type,
+        content?.title || entry.proposed_type,
         entry.submitted_by + " | " + entry.id,
-        JSON.stringify(entry.proposed_content, null, 2),
+        JSON.stringify(content || entry.proposed_content, null, 2),
       );
-      card.append(actions("memory", entry.id));
+      card.append(actions("memory", entry.id, token));
       memories.append(card);
     }
     const structures = el("structures");
